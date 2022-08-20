@@ -8,25 +8,47 @@ import com.mindmarket.weatherapp.domain.weather.WeatherType.Companion.fromWMO
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-fun WeatherDataDto.toWeatherMap(): Map<Int, List<WeatherData> {
+private data class IndexedWeatherData(
+    val index: Int,
+    val data: WeatherData
+)
+
+fun WeatherDataDto.toWeatherDataMap(): Map<Int, List<WeatherData>> {
     return time.mapIndexed { index, time ->
-        val temparature = temparatures[index]
+        val temperature = temparatures[index]
         val weatherCode = weatherCodes[index]
         val windSpeed = windSpeeds[index]
         val pressure = pressures[index]
         val humidity = humidities[index]
-        WeatherData(
-            time = LocalDateTime.parse(time, DateTimeFormatter.ISO_DATE_TIME),
-            temparatureCelsius = temparature,
-            pressure = pressure,
-            windSpeed = windSpeed,
-            weatherType = fromWMO(weatherCode),
-            humidity = humidity
+        IndexedWeatherData(
+            index = index,
+            data = WeatherData(
+                time = LocalDateTime.parse(time, DateTimeFormatter.ISO_DATE_TIME),
+                temparatureCelsius = temperature,
+                pressure = pressure,
+                windSpeed = windSpeed,
+                weatherType = fromWMO(weatherCode),
+                humidity = humidity
+            )
         )
-    }.groupBy {
-        it.weatherType
+    }.groupBy { indexedWeatherData ->
+        indexedWeatherData.index / 24
+    }.mapValues {
+        it.value.map { weatherData ->
+            weatherData.data
+        }
     }
 }
 
-fun WeatherDto.toWeather(): WeatherInfo {
+fun WeatherDto.toWeatherInfo(): WeatherInfo {
+    val weatherDataMap = this.weatherData.toWeatherDataMap()
+    val now = LocalDateTime.now()
+    val currentWeatherData = weatherDataMap[0]?.find {
+        val hour = if (now.hour < 30) now.hour else now.hour + 1
+        it.time.hour == hour
+    }
+    return WeatherInfo(
+        weatherDataPerDay = weatherDataMap,
+        currentWeatherData = currentWeatherData
+    )
 }
